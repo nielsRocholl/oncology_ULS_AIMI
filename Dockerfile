@@ -1,5 +1,7 @@
 FROM nvidia/cuda:12.2.0-runtime-ubuntu20.04 AS base
 
+ARG LOCAL_BUILD="true"
+
 RUN rm /etc/apt/sources.list.d/cuda.list
 
 RUN apt-get update && \
@@ -43,8 +45,8 @@ RUN groupadd -r user && useradd -m --no-log-init -r -g user user
 
 RUN chown -R user /opt/algorithm/
 
-RUN mkdir -p /opt/app /input /output \
-    && chown user:user /opt/app /input /output
+RUN mkdir -p /opt/app /input /output /opt/ml/model \
+    && chown -R user:user /opt/app /input /output /opt/ml
 
 USER user
 WORKDIR /opt/app
@@ -52,20 +54,22 @@ WORKDIR /opt/app
 ENV PATH="/home/user/.local/bin:${PATH}"
 
 COPY --chown=user:user process.py /opt/app/
-COPY --chown=user:user export2onnx.py /opt/app/
+COPY --chown=user:user config.json /opt/app/
+COPY --chown=user:user ./architecture/ /tmp/architecture/
 
 ### ALGORITHM
 
 # Copy custom trainers to docker
 COPY --chown=user:user ./architecture/extensions/nnunetv2/ /opt/algorithm/nnunet/nnunetv2/
 
-# Copy model checkpoint to docker (uncomment if you put the model weights directly in this repo)
-#COPY --chown=user:user ./architecture/nnUNet_results/ /opt/algorithm/nnunet/nnUNet_results/
+# Conditionally copy weights and test data for local builds
+RUN if [ "$LOCAL_BUILD" = "true" ]; then \
+        echo "Building for local testing - copying weights and data"; \
+        mkdir -p /opt/ml/model && cp -r /tmp/architecture/nnUNet_results /opt/ml/model/ 2>/dev/null || echo "No weights found"; \
+        cp -r /tmp/architecture/input/* /input/ 2>/dev/null || echo "No test data found"; \
+    fi
 
-# Copy container testing data to docker (uncomment if you want to see if the model works and put a test image and spacing in this repo)
-#COPY --chown=user:user /architecture/input/ /input/
-
-# Set environment variable defaults
+# Set environment variable defaults for nnUNet
 ENV nnUNet_raw="/opt/algorithm/nnunet/nnUNet_raw" \
     nnUNet_preprocessed="/opt/algorithm/nnunet/nnUNet_preprocessed" \
     nnUNet_results="/opt/algorithm/nnunet/nnUNet_results"

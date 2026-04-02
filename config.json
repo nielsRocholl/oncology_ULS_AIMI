@@ -1,0 +1,15 @@
+{
+  "crop_z_start": 32,
+  "crop_z_end": 96,
+  "crop_x_start": 64,
+  "crop_x_end": 192,
+  "crop_y_start": 64,
+  "crop_y_end": 192,
+  "pad_z_before": 32,
+  "pad_z_after": 32,
+  "pad_x_before": 64,
+  "pad_x_after": 64,
+  "pad_y_before": 64,
+  "pad_y_after": 64,
+  "model_path": "/opt/ml/model/nnUNet_results/Dataset601_Full_128_64/nnUNetTrainer_ULS_500_QuarterLR__nnUNetPlans_shallow__3d_fullres_resenc"
+}

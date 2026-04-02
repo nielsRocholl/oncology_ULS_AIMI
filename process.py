@@ -14,13 +14,17 @@ from nnunetv2.utilities.helpers import empty_cache
 
 class Uls23(SegmentationAlgorithm):
     def __init__(self):
+        # Load configuration
+        with open("config.json", 'r') as f:
+            self.config = json.load(f)
+        
         self.image_metadata = None  # Keep track of the metadata of the input volume
         self.id = None  # Keep track of batched volume file name for export
         self.z_size = 128  # Number of voxels in the z-dimension for each input VOI
         self.xy_size = 256  # Number of voxels in the xy-dimensions for each input VOI
         self.z_size_model = 64 # Number of voxels in the z-dimension that the model takes
         self.xy_size_model = 128 # Number of voxels in the xy-dimensions that the model takes
-        self.device = torch.device("cuda")
+        self.device = torch.device("cpu")
         self.predictor = None # nnUnet predictor
 
     def start_pipeline(self):
@@ -41,8 +45,6 @@ class Uls23(SegmentationAlgorithm):
         print(f"Total job runtime: {end_time - start_time}s")
 
     def load_model(self):
-        start_model_load_time = time.time()
-
         # Set up the nnUNetPredictor
         self.predictor = nnUNetPredictor(
             tile_step_size=0.5,
@@ -55,22 +57,18 @@ class Uls23(SegmentationAlgorithm):
         )
         # Initialize the network architecture, loads the checkpoint
         self.predictor.initialize_from_trained_model_folder(
-            "/opt/ml/model/nnUNet_results/Dataset090_ULS23_Combined/nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres",
+            self.config["model_path"],
             use_folds=("all"),
             checkpoint_name="checkpoint_best.pth",
         )
-        end_model_load_time = time.time()
-        print(f"Model loading runtime: {end_model_load_time - start_model_load_time}s")
     
     def load_data(self):
         """
         1) Loads the .mha files containing the VOI stacks in the input directory
         2) Unstacks them into individual lesion VOI's
-        3) Optional: preprocess volumes
-        4) Predict per VOI
+        3) Crops to model input size for faster inference
+        4) Saves cropped VOIs for prediction
         """
-        start_load_time = time.time()
-        
         # Input directory is determined by the algorithm interface on GC
         input_dir = Path("/input/images/stacked-3d-ct-lesion-volumes/")
 
@@ -90,61 +88,49 @@ class Uls23(SegmentationAlgorithm):
                 voi = image_data[self.z_size * i:self.z_size * (i + 1), :, :]
                 # Note: spacings[i] contains the scan spacing for this VOI
 
-                # Unstack the VOI's, perform optional preprocessing and save
-                # them to individual binary files for memory-efficient access
-                print(voi.shape)
-                voi = voi[32:96, 64:192, 64:192]
+                # Crop to model input size (64x128x128) from original 128x256x256
+                voi = voi[self.config["crop_z_start"]:self.config["crop_z_end"], 
+                          self.config["crop_x_start"]:self.config["crop_x_end"], 
+                          self.config["crop_y_start"]:self.config["crop_y_end"]]
                 np.save(f"/tmp/voi_{i}.npy", np.array([voi])) # Add dummy batch dimension for nnUnet
-
-        end_load_time = time.time()
-        print(f"Data pre-processing runtime: {end_load_time - start_load_time}s")
 
         return spacings
 
     def predict(self, spacings):
         """
-        Runs nnUnet inference on the images, then moves to post-processing
+        Runs nnUnet inference on the cropped images
         :param spacings: list containing the spacing per VOI
         :return: list of numpy arrays containing the predicted lesion masks per VOI
         """
-        start_inference_time = time.time()
         predictions = []
         
         for i, voi_spacing in enumerate(spacings):
             # Load the 3D array from the binary file
             voi = np.load(f"/tmp/voi_{i}.npy")
-            #voi = voi.to(dtype=np.float32)
 
-            print(f'\nPredicting image of shape: {voi.shape}, spacing: {voi_spacing}')
             predictions.append(self.predictor.predict_single_npy_array(voi, {'spacing': voi_spacing}, None, None, False))
 
-        end_inference_time = time.time()
-        print(f"Total inference runtime: {end_inference_time - start_inference_time}s")
         return predictions
 
     def postprocess(self, predictions):
         """
-        Runs post-processing and saves stacked predictions.
+        Runs post-processing and pads predictions back to original size.
         :param predictions: list of numpy arrays containing the predicted lesion masks per VOI
         """
-        start_postprocessing_time = time.time()
-        
         # Run postprocessing code here, for the baseline we only remove any
         # segmentation outputs not connected to the center lesion prediction
         for i, segmentation in enumerate(predictions):
-            print(f"Post-processing prediction {i}")
             instance_mask, num_features = ndimage.label(segmentation)
             if num_features > 1:
-                print("Found multiple lesion predictions")
                 segmentation[instance_mask != instance_mask[
                     int(self.z_size_model / 2), int(self.xy_size_model / 2), int(self.xy_size_model / 2)]] = 0
                 segmentation[segmentation != 0] = 1
 
-            # Pad segmentations to fit with original image size
+            # Pad segmentations back to fit with original image size
             segmentation_pad = np.pad(segmentation, 
-                    ((32, 32),  
-                    (64, 64),   
-                    (64, 64)),
+                    ((self.config["pad_z_before"], self.config["pad_z_after"]),  
+                    (self.config["pad_x_before"], self.config["pad_x_after"]),   
+                    (self.config["pad_y_before"], self.config["pad_y_after"])),
                     mode='constant', constant_values=0)
 
             # Convert padded segmentation back to a SimpleITK image
@@ -154,9 +140,9 @@ class Uls23(SegmentationAlgorithm):
             original_origin = self.image_metadata.GetOrigin()
             original_spacing = self.image_metadata.GetSpacing()
             new_origin = [
-                original_origin[0] - 64 * original_spacing[0],  # Adjust for x padding
-                original_origin[1] - 64 * original_spacing[1],  # Adjust for y padding
-                original_origin[2] - 32 * original_spacing[2],  # Adjust for z padding
+                original_origin[0] - self.config["pad_x_before"] * original_spacing[0],  # Adjust for x padding
+                original_origin[1] - self.config["pad_y_before"] * original_spacing[1],  # Adjust for y padding
+                original_origin[2] - self.config["pad_z_before"] * original_spacing[2],  # Adjust for z padding
             ]
             segmentation_image.SetOrigin(new_origin)
 
@@ -174,10 +160,6 @@ class Uls23(SegmentationAlgorithm):
         mask.CopyInformation(self.image_metadata)
 
         sitk.WriteImage(mask, f"/output/images/ct-binary-uls/{self.id.name}")
-        print("Output dir contents:", os.listdir("/output/images/ct-binary-uls/"))
-        print("Output batched image shape:", predictions.shape)
-        end_postprocessing_time = time.time()
-        print(f"Postprocessing & saving runtime: {end_postprocessing_time - start_postprocessing_time}s")
 
 if __name__ == "__main__":
     Uls23().start_pipeline()
