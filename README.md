@@ -31,46 +31,34 @@ You can use this repo in two ways:
 8. If you aren't getting any errors, your model is ready to be submitted to the ULS23 challenge! That can be done on the challenge page: https://uls23.grand-challenge.org/
 
 ## Optional: Local Testing with Docker
-
 If you want to test locally before submitting, you have to use Docker locally. As mentioned before, this can also be done on GC, but locally might go a bit faster in terms of debugging. You will have to work a bit with Docker with this, so it might also be good practice for this (: 
 
 ### Prerequisites for Testing
 - A trained nnUNet model.
-- Docker: Download from [docker.com](https://www.docker.com/get-started).
+- Docker: See [docker.com](https://www.docker.com/get-started). We recommend using Docker Desktop in combination with the VSCode extension of Docker. If you have this, you just need to right click on a dockerfile to build the container instead of using the terminal.
 
 ### Setup for local testing
-
 1. Clone this repo locally.
-2. Put your nnUNet results in `architecture/nnUNet_results/`. The folder structure should look like this:
+2. Set LOCAL_BUILD in the dockerfile to "true".
+3. Put your nnUNet results in `architecture/nnUNet_results/`. The folder structure should look like this:
    ```
    architecture/
    └── nnUNet_results/
-       └── Dataset090_ULS23_Combined/
-           └── nnUNetTrainer__nnUNetResEncUNetLPlans__3d_fullres/
-               ├── checkpoint_best.pth
-               ├── checkpoint_final.pth
-               ├── dataset.json
-               └── ...other files...
+       └── Dataset000_Name/
+           └── ...
    ```
-   (Replace `Dataset090_ULS23_Combined` with your actual dataset name if different)
-3. (Optional) Put the sample input image `stacked_voi_sample.mha` from the zenodo page in `architecture/input/images/stacked-3d-ct-lesion-volumes/` (the `stacked_spacing_sample.json` is already in the right place).
-4. If you want to do CPU testing instead of GPU, change `device` in `process.py` from `"cuda"` to `"cpu"`.
-5. Build the container:
-   ```bash
-   docker build --build-arg LOCAL_BUILD=true -t uls23 .
-   ```
-6. Run the container:
-   ```bash
-   docker run --rm -v C:\path\to\output:/output uls23
-   ```
-   Replace `C:\path\to\output` with a folder on your computer for the output.
+
+4. Make sure the model dataset name is correct in the config.json file. 
+5. Put the sample input image `stacked_voi_sample.mha` from the zenodo page in `architecture/input/images/stacked-3d-ct-lesion-volumes/` (the `stacked_3d-volumetric-spacings.json` is already in the right place).
+6. If you want to do CPU testing instead of GPU, change `device` in `process.py` from `"cuda"` to `"cpu"`.
+7. Build the container using Docker.
+8. Run the container using Docker.
 
 ## How It Works
-
 This section is just some more info on what this repo actually does. Not necessary to know, but for your information. 
 
 1. **Load Input**: Reads `.mha` images and spacing JSON.
-2. **Crop**: Cuts to 64×128×128.
+2. **Crop**: Crops to 64×128×128.
 3. **Predict**: Runs your nnUNet model.
 4. **Pad**: Adds back to original size.
 5. **Save**: Outputs stacked masks.
@@ -84,7 +72,6 @@ The `config.json` contains all the cropping and padding settings. You technicall
 - `architecture/`: Your weights and test data.
 - `Dockerfile`: For testing.
 - `scripts/build.sh`: Build script.
-
 
 ## VERY IMPORTANT
 It's always possible to get some versioning errors with nnunetv2 or python, since packages are constantly being updated. Generally, it's smart to use the same package versions as this repo uses. We highly recommend trying to upload your model weights early in the process, before having done all the training, just to be sure everything works. You could for example just take your second epoch weights and try it. This way, you prevent errors later on! 
