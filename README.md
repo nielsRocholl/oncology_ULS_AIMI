@@ -11,7 +11,9 @@ Everything else to get started can be found here: https://zenodo.org/records/153
 
 ## How to use this repo
 You can use this repo in two ways:
+
 **For submission**: You upload this repo, along with a tar.gz file containing your model weights, to Grand Challenge to evaluate your model on that platform.
+
 **For trying out**: You have this repo on your local computer, you add your weights to this repo, and see if everything runs properly locally by running it on one image. This is useful for debugging, because on Grand Challenge it might take a while to see your errors. It is however also possible to do this on GC, you can decide this yourself.
 
 ## Quick Start: Submit to Grand Challenge
@@ -21,17 +23,17 @@ You can use this repo in two ways:
 - An algorithm page on Grand Challenge (which you can make by clicking on 'Add a new Algorithm' on the Algorithm tab)
 
 ### Steps to Submit
-1. Zip your `nnUNet_results` folder into a `.tar.gz`.
+1. Zip your nnUNet model into a `.tar.gz`.
 2. Fork this repo so you have your own version.
 3. Go to the page of your algorithm.
-4. Upload your model tar under 'Model'.
+4. Upload your model tar.gz under 'Model'.
 5. Connect your version of this repo under 'Containers'.
 6. Tag your repo (meaning make a release version. Grand Challenge sees these releases automatically).
-7. Go to 'Try out algorithm', and see if this all works by uploading the stacked_voi_sample.mha that's on the zenodo page, along with the stacked_spacing_sample.json that's in this repo under architecture/input/. This is your test image, that functions as a debugger.
+7. Go to 'Try out algorithm', and see if this all works by uploading the stacked_voi_sample.mha that's on the zenodo page, along with the stacked_spacing_sample.json that's in this repo under architecture/input/. You can use this image as a debugging case.
 8. If you aren't getting any errors, your model is ready to be submitted to the ULS23 challenge! That can be done on the challenge page: https://uls23.grand-challenge.org/
 
 ## Optional: Local Testing with Docker
-If you want to test locally before submitting, you have to use Docker locally. As mentioned before, this can also be done on GC, but locally might go a bit faster in terms of debugging. You will have to work a bit with Docker with this, so it might also be good practice for this (: 
+If you want to test locally before submitting, you have to use Docker locally. As mentioned before, this can also be done on GC, but locally might go a bit faster in terms of debugging. You will have to work a bit with Docker with this, so it might also be good practice (: 
 
 ### Prerequisites for Testing
 - A trained nnUNet model.
@@ -54,7 +56,7 @@ If you want to test locally before submitting, you have to use Docker locally. A
 7. Build the container using Docker.
 8. Run the container using Docker.
 
-## How It Works
+## More about this repo
 This section is just some more info on what this repo actually does. Not necessary to know, but for your information. 
 
 1. **Load Input**: Reads `.mha` images and spacing JSON.
@@ -64,13 +66,13 @@ This section is just some more info on what this repo actually does. Not necessa
 5. **Save**: Outputs stacked masks.
 
 ### Customization
-The `config.json` contains all the cropping and padding settings. You technically don't have to change anything here, but it's good to know.
+The `config.json` contains all the cropping and padding settings. You technically don't have to change anything here unless you want to change the path to your model, but it's good to know.
 
 ### File Structure
 - `process.py`: Inference script.
 - `config.json`: Settings.
-- `architecture/`: Your weights and test data.
-- `Dockerfile`: For testing.
+- `architecture/`: Your weights and test data, along with some nnunetv2 extensions the baseline model uses.
+- `Dockerfile`: Main file that you run to build the container.
 - `scripts/build.sh`: Build script.
 
 ## VERY IMPORTANT
